@@ -1,10 +1,11 @@
-use std::fs::File;
+use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::io;
 use std::ops::{Deref, DerefMut};
+use std::time::SystemTime;
 
 use request::Request;
-use response::{self, Responder};
+use response::{self, Responder, status};
 use http::ContentType;
 
 /// A file with an associated name; responds with the Content-Type based on the
@@ -86,7 +87,25 @@ impl<'r> Responder<'r> for NamedFile {
                 response.set_header(ct);
             }
         }
+        use rocket_http::hyper::header::{LastModified, HttpDate, IfModifiedSince};
+        let mtime = {
+          let metadata = fs::metadata(&self.0.as_path()).unwrap();
+          let epoch : std::time::Duration = metadata.modified().unwrap().duration_since(SystemTime::UNIX_EPOCH).unwrap();
+          let tm = time::strptime(&epoch.as_secs().to_string(), "%s").unwrap();
+          HttpDate(tm)
+        };
+        response.set_header(LastModified(mtime));
 
+        if req.headers().contains("If-Modified-Since") {
+          if let Some(if_modified_since) = req.headers().get_one("If-Modified-Since") {
+            let if_modified_since = time::strptime(if_modified_since, "%a, %d %b %Y %H:%M:%S GMT").unwrap();
+            let if_modified_since = HttpDate(if_modified_since);
+            if mtime <= if_modified_since {
+              use response::status;
+              return status::NotModified("Not Modified").respond_to(req)
+            }
+          }
+        }
         Ok(response)
     }
 }

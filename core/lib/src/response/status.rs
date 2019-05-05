@@ -175,6 +175,18 @@ impl<'r, R: Responder<'r>> Responder<'r> for NotFound<R> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct NotModified<R>(pub R);
+
+/// Sets the status code of the response to 304 Not Modified.
+impl<'r, R: Responder<'r>> Responder<'r> for NotModified<R> {
+    fn respond_to(self, req: &Request) -> Result<Response<'r>, Status> {
+        Response::build()
+            .status(Status::NotModified)
+            .ok()
+    }
+}
+
 /// Creates a response with the given status code and underlying responder.
 ///
 /// # Example
